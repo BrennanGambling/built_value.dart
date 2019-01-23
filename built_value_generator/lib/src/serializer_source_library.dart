@@ -165,8 +165,28 @@ abstract class SerializerSourceLibrary
                   .toList()
                     ..sort())
               .join('\n') +
+          (serializeForTransitiveClasses[field]
+                  .where((sourceClass) => sourceClass.genericParameters.length > 0)
+                  .map((sourceClass) {
+                    //Type genericTypes = sourceClass.element.typeParameters.first.
+                    //print(genericTypes);
+                    final String genericBuilder = '''..addBuilderFactory(
+                      const FullType(${sourceClass.name}, const [const FullType(String)]),
+                      () => ${sourceClass.name}Builder<String>())''';
+                    //print(genericBuilder);
+                    //print(sourceClass.genericBounds);
+                    return genericBuilder;
+                  })
+                  .toList()
+                    ..sort())
+              .join('\n') +
           ').build();')
       .join('\n');
+
+  String _generateBuilderFactories(String className, BuiltList<BuiltList<String>> genericTypes) {
+    String output = "";
+    final int numGenericTypes = genericTypes.length;
+  }
 }
 
 InvalidGenerationSourceError _makeError(Iterable<String> todos) {
