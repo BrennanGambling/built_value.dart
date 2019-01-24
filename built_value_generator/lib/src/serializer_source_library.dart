@@ -149,6 +149,8 @@ abstract class SerializerSourceLibrary
             .join('\n');
   }
 
+  //TODO: what about nested generic parameters.
+
   String _generateSerializersTopLevelFields() => serializersForAnnotations.keys
       .map((field) =>
           'Serializers _\$$field = (new Serializers().toBuilder()' +
@@ -165,27 +167,103 @@ abstract class SerializerSourceLibrary
                   .toList()
                     ..sort())
               .join('\n') +
+          //ignore this added block for now
           (serializeForTransitiveClasses[field]
-                  .where((sourceClass) => sourceClass.genericParameters.length > 0)
+                  .where(
+                      (sourceClass) => sourceClass.genericParameters.length > 0)
                   .map((sourceClass) {
-                    //Type genericTypes = sourceClass.element.typeParameters.first.
-                    //print(genericTypes);
-                    final String genericBuilder = '''..addBuilderFactory(
-                      const FullType(${sourceClass.name}, const [const FullType(String)]),
-                      () => ${sourceClass.name}Builder<String>())''';
-                    //print(genericBuilder);
-                    //print(sourceClass.genericBounds);
-                    return genericBuilder;
-                  })
-                  .toList()
+                      //serializeForClasses.forEach((k, v) => print("$k, $v"));
+                      //serializeForTransitiveClasses.forEach((k, v) => print("$k, $v"));
+                      return "";
+          }).toList()
                     ..sort())
               .join('\n') +
           ').build();')
       .join('\n');
 
-  String _generateBuilderFactories(String className, BuiltList<BuiltList<String>> genericTypes) {
-    String output = "";
-    final int numGenericTypes = genericTypes.length;
+  ///Generates a [Set] of [BuiltList]s where each of the [BuiltList]s is a
+  ///permutation of the possible generic parameters derived from [genericRagged].
+  ///
+  ///[genericRagged] is a ragged array of possible generic type parameters where
+  ///each of the sublists has all of the possible types for the i'th generic
+  ///type parameter.
+  static Set<BuiltList<String>> _generateGenericPermutationsSet(
+      List<List<String>> genericRagged,
+      int topLevelPos,
+      BuiltList<String> base,
+      Set<BuiltList<String>> output) {
+    if (genericRagged.length == 0) {
+      return output;
+    } else if (topLevelPos == (genericRagged.length - 1)) {
+      if (genericRagged[topLevelPos].length == 0) {
+        output.add(base);
+        return output;
+      } else {
+        genericRagged[topLevelPos].forEach((s) {
+          final ListBuilder<String> currentListBuilder = ListBuilder(base)..add(s);
+          output.add(currentListBuilder.build());
+        });
+        return output;
+      }
+    } else {
+      if (genericRagged[topLevelPos].length == 0) {
+        return _generateGenericPermutationsSet(
+            genericRagged, topLevelPos + 1, base, output);
+      } else {
+        genericRagged[topLevelPos].forEach((s) {
+          final ListBuilder<String> currentListBuilder = ListBuilder(base)..add(s);
+          _generateGenericPermutationsSet(genericRagged, topLevelPos + 1,
+              currentListBuilder.build(), output);
+        });
+        return output;
+      }
+    }
+  }
+
+  ///Generates a String of the given [genericTypes] with each type surround by
+  ///<> and concatinated for use as generic parameter declaration.
+  static String _generateGenericParameterArgumentString(BuiltList<String> genericTypes) {
+    final StringBuffer genericArgumentsBuffer = StringBuffer();
+    genericTypes.forEach((t) => genericArgumentsBuffer.write(
+      "<$t>"
+    ));
+    return genericArgumentsBuffer.toString();
+  }
+
+  ///Generates the code for creation of the List<FullType> for the
+  ///builder factory FullType.
+  ///
+  ///For a type declaration with generic parameters:
+  ///  String, int
+  ///The generic FullType parameters would be:
+  ///```dart
+  ///  const [const FullType(String), const FullType(int),]
+  /// ```
+  static String _generateGenericParameterFullTypeString(BuiltList<String> genericTypes) {
+    final StringBuffer genericFullTypesBuffer = StringBuffer();
+    genericFullTypesBuffer.write("const [");
+    genericTypes.forEach((t) => genericFullTypesBuffer.write(
+      "const FullType($t),"
+    ));
+    genericFullTypesBuffer.write("]");
+    return genericFullTypesBuffer.toString();
+  }
+
+  ///Generates a builder factory for the given [className] with [genericTypes].
+  ///
+  ///For class BuiltList with generic types String and int:
+  ///```dart
+  ///  ..addBuilderFactory(
+  ///    const FullType(BuiltList, const [const FullType(String), const FullType(int),]),
+  ///    () => BuiltList<String><int>())
+  ///```
+  static String _generateBuilderFactories(String className, BuiltList<String> genericTypes) {
+    final String genericFullType = _generateGenericParameterFullTypeString(genericTypes);
+    final String genericArguments = _generateGenericParameterArgumentString(genericTypes);
+    return 
+    '..addBuilderFactory('
+    '  const FullType($className, $genericFullType),'
+    '  () => $className$genericArguments())';
   }
 }
 
